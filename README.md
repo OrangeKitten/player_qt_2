@@ -1,3 +1,8 @@
 - 24/08/31
 - 添加 `demux` 模块
 - 添加 `packet` 队列
+- - 
+- - 24/09/01
+- 添加 `decode` 模块,目前可以解析出来PCM数据
+- 添加SDL audio_callback线程目前看线程没有跑- 添加SDL audio_callback线程目前看线程没有跑
+- 解码后的数据也存入到队列中，目前有四个队列分别是AVPacket (audio\video) AVFrame (audio\video)
