@@ -16,7 +16,6 @@ Demux::Demux(char *url) {
   write_size_ = 0;
   url_ = url;
 
-
   if (OpenFile() < 0) {
     log_error("OpenFile Failed");
   }
@@ -76,8 +75,6 @@ int Demux::OpenFile() {
   video_stream_ = format_ctx_->streams[video_stream_index_];
 
   // DumpMedioInfo();
-
-
 }
 Demux::~Demux() {
   if (read_packet_thread_->joinable()) {
@@ -161,35 +158,44 @@ void Demux::StartReadPacket() {
       std::make_unique<std::thread>(&Demux::ReadPacketThread, this);
 }
 void Demux::ReadPacketThread() {
-   
+
   int pkt_count = 0;
   int print_max_count = 10;
   log_debug("\n-----av_read_frame start\n");
   int ret = -1;
-  while (1)
-  {
-    //在取出数据的时候做释放
-      AVPacket *pkt = av_packet_alloc();
-      ret = av_read_frame(format_ctx_, pkt);
-      if (ret < 0)
-      {
-          log_debug("av_read_frame end\n");
-          break;
-      }
-    read_size_+=pkt->size;
-
-    if (pkt->stream_index == audio_stream_index_)
-    {
-       // log_debug("Push audio pkt size = %d",pkt->size);
-        audio_pkt_queue_->Push(pkt);
-    } else if (pkt->stream_index == video_stream_index_){
-       // log_debug("Push video pkt size = %d",pkt->size);
-        video_pkt_queue_->Push(pkt);
+  while (1) {
+    // 在取出数据的时候做释放
+    AVPacket *pkt = av_packet_alloc();
+    ret = av_read_frame(format_ctx_, pkt);
+    if (ret < 0) {
+      log_debug("av_read_frame end\n");
+      break;
     }
-    write_size_+=pkt->size;
-      
+    read_size_ += pkt->size;
+
+    if (pkt->stream_index == audio_stream_index_) {
+      // log_debug("Push audio pkt size = %d",pkt->size);
+      audio_pkt_queue_->Push(pkt);
+    } else if (pkt->stream_index == video_stream_index_) {
+      // log_debug("Push video pkt size = %d",pkt->size);
+      video_pkt_queue_->Push(pkt);
+    }
+    write_size_ += pkt->size;
   }
+}
 
+Ret Demux::getAudioAvCodecInfo(AVCodecParameters *dec) {
+  if (audio_stream_ == nullptr&&dec == nullptr) {
+    return Ret_ERROR;
+  }
+  memcpy(dec, audio_stream_->codecpar, sizeof(AVCodecParameters));
+  return Ret_OK;
+}
 
-
+Ret Demux::getVideoAvCodecInfo(AVCodecParameters *dec) {
+    if (video_stream_ == nullptr&&dec == nullptr) {
+    return Ret_ERROR;
+  }
+  memcpy(dec, video_stream_->codecpar, sizeof(AVCodecParameters));
+  return Ret_OK;
 }

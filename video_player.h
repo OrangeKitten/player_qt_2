@@ -11,16 +11,16 @@ public:
     VideoPlayer(char *url);
     ~VideoPlayer();
     void Play();
-    void Stop();
-    void Pause();
-    void SetPause(bool pause);
-    bool GetPause();
-    void SetPlay(bool play);
-    bool GetPlay();
-    void SetPosition(int position);
-    int GetPosition();
-    void SetVolume(int volume);
-    int GetVolume();
+//    void Stop();
+//    void Pause();
+//    void SetPause(bool pause);
+//    bool GetPause();
+//    void SetPlay(bool play);
+//    bool GetPlay();
+//    void SetPosition(int position);
+//    int GetPosition();
+//    void SetVolume(int volume);
+//    int GetVolume();
     Ret  init();
 private:
     std::unique_ptr<Demux> demux_;

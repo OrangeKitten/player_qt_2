@@ -14,12 +14,12 @@ class PacketQueue {
 public:
   PacketQueue();
   ~PacketQueue();
-  void Push(AVPacket *pkt);
-  AVPacket* Pop();
-  void PushNullpacket();
+  void Push(void *pkt);
+  void* Pop();
+//  void PushNullpacket();
   int Size();
   bool Empty();
-  void Clear();
+//  void Clear();
   void wait();
   void notify();
 
@@ -27,7 +27,7 @@ public:
 private:
   std::mutex mutex_;
   std::condition_variable condition_;
-  std::queue<AVPacket *> packets_queue_;
+  std::queue< void*> packets_queue_;
   int queue_size_;
 };
 #endif

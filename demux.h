@@ -5,6 +5,7 @@
 #include "packet_queue.h"
 #include <memory>
 #include <thread>
+#include "type.h"
 extern "C"
 {
 #include <libavformat/avformat.h>
@@ -17,6 +18,8 @@ public:
     void setAudioQueue(std::shared_ptr<PacketQueue>pkt_queue);
     void setVideoQueue(std::shared_ptr<PacketQueue>pkt_queue);
     void StartReadPacket();
+    Ret getAudioAvCodecInfo( AVCodecParameters *dec);
+    Ret getVideoAvCodecInfo( AVCodecParameters *dec);
 private:
     void DumpMedioInfo();
     int OpenFile();

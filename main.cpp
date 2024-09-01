@@ -4,13 +4,16 @@
 #include <thread>
 #include <chrono>
  using namespace std;
-
+//for SDL
+#undef main
  int main() {
-     char * url = "2_audio.mp4";
+     char * url = "believe.ts";
   VideoPlayer videoplay(url);
   videoplay.init();
   videoplay.Play();
- std::this_thread::sleep_for(std::chrono::seconds(1));
+ std::this_thread::sleep_for(std::chrono::seconds(10));
+ printf("program finish ");
      return 0;
  }
+
 

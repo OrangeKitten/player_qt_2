@@ -6,6 +6,7 @@ CONFIG -= qt
 SOURCES += *.cpp\
             *.c
 
+
 win32 {
 INCLUDEPATH += $$PWD/ffmpeg-4.2.1-win32-dev/include
 INCLUDEPATH += $$PWD/SDL2/include
