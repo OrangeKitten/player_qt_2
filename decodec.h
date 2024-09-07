@@ -5,6 +5,7 @@
 #include <memory>
 #include <thread>
 #include "file_dump.h"
+#include "audio_resample.h"
 #include <SDL.h>
 extern "C" {
 #include "libavcodec/avcodec.h"
@@ -33,6 +34,8 @@ private:
   Ret DecodeAudio(AVPacket*audio_pkt);
   Ret DecodeVideo(AVPacket*audio_pkt);
  Ret InitSDL();
+ AVFrame * AllocOutFrame();
+ AVSampleFormat TransforSDLFormattoFFmpeg(int SDL_format);
 
 private:
   std::shared_ptr<PacketQueue> audio_pkt_queue_;
@@ -41,16 +44,19 @@ private:
   std::unique_ptr<std::thread> video_decode_thread_;
   AVCodecParameters * aduio_codec_info_;
   AVCodecParameters * video_codec_info_;
-  std::unique_ptr<FileDump>  dump_file_;
+ 
   AVCodecContext * audio_decodec_ctx_;
   AVCodec *decodec_;
   AVFrame *audio_frame_;
+  AVFrame *audio_frame_resample_;
   int sdl_flag_;
   SDL_AudioSpec want_audio_spec_;
   SDL_AudioDeviceID audio_dev;
+  std::unique_ptr<AudioReSample> audio_resample_;
 public:
   std::shared_ptr<PacketQueue> audio_frame_queue_;
   std::shared_ptr<PacketQueue> video_frame_queue_;
+  std::unique_ptr<FileDump>  dump_file_;
 
 
 };

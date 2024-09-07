@@ -10,40 +10,43 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
 Decodec::Decodec() {
   dump_file_ = std::make_unique<FileDump>("audio.pcm");
   if (!(audio_frame_ = av_frame_alloc())) {
-    log_error( "Could not allocate audio audio_frame_\n");
+    log_error("Could not allocate audio audio_frame_\n");
   }
+
   aduio_codec_info_ = (AVCodecParameters *)malloc(sizeof(AVCodecParameters));
   video_codec_info_ = (AVCodecParameters *)malloc(sizeof(AVCodecParameters));
-  if(InitSDL()!=Ret_OK) {
-    log_error( "init sdl failed");
+  if (InitSDL() != Ret_OK) {
+    log_error("init sdl failed");
   }
-
-
+  audio_resample_ = std::make_unique<AudioReSample>();
 }
 
 Ret Decodec::InitSDL() {
-  sdl_flag_ = SDL_INIT_AUDIO ;
-    if (SDL_Init (sdl_flag_)) {
-        log_error( "Could not initialize SDL - %s\n", SDL_GetError());
-        log_error( "(Did you set the DISPLAY variable?)\n");
-        return Ret_ERROR;
-    }
-    //ToDo 目前写死
+  sdl_flag_ = SDL_INIT_AUDIO;
+  if (SDL_Init(sdl_flag_) < 0) {
+    log_error("Could not initialize SDL - %s\n", SDL_GetError());
+    log_error("(Did you set the DISPLAY variable?)\n");
+    return Ret_ERROR;
+  }
+  // ToDo 目前写死
   want_audio_spec_.freq = 48000;
-    want_audio_spec_.format = AUDIO_F32LSB;
-    want_audio_spec_.channels = 2;
-    want_audio_spec_.silence = 0;
-    want_audio_spec_.samples = 1024;
-    want_audio_spec_.callback = sdl_audio_callback;
+  // want_audio_spec_.format = AV_SAMPLE_FMT_S16; // ffmpeg定义
+  want_audio_spec_.format = AUDIO_S16LSB; // SDL 定义
+  want_audio_spec_.channels = 2;
+  want_audio_spec_.silence = 0;
+  want_audio_spec_.samples = 1024;
+  want_audio_spec_.callback = sdl_audio_callback;
   want_audio_spec_.userdata = this;
-if ((audio_dev =SDL_OpenAudioDevice(nullptr,0,&want_audio_spec_, nullptr,SDL_AUDIO_ALLOW_FREQUENCY_CHANGE)) < 0)
-    {
-        log_error("can't open audio.\n");
-        return Ret_ERROR;
-    }
-     SDL_PauseAudioDevice(audio_dev,0);
-    return Ret_OK;
-
+  int num = SDL_GetNumAudioDevices(0);
+  const char *deviceName = SDL_GetAudioDeviceName(num, 0);
+  if ((audio_dev =
+           SDL_OpenAudioDevice(deviceName, 0, &want_audio_spec_, nullptr,
+                               SDL_AUDIO_ALLOW_FREQUENCY_CHANGE)) < 2) {
+    log_error("can't open audio.\n");
+    return Ret_ERROR;
+  }
+  SDL_PauseAudioDevice(audio_dev, 0);
+  return Ret_OK;
 }
 Decodec::~Decodec() {
   if (audio_decode_thread_->joinable()) {
@@ -56,12 +59,19 @@ Decodec::~Decodec() {
   free(aduio_codec_info_);
   free(video_codec_info_);
   av_frame_free(&audio_frame_);
+  // av_frame_free(&audio_frame_resample_);
 }
 Ret Decodec::Init() {
   Ret ret = Ret_OK;
   audio_frame_queue_ = std::make_shared<PacketQueue>();
   video_frame_queue_ = std::make_shared<PacketQueue>();
   ret = InitAudio();
+  audio_resample_->Init(
+      aduio_codec_info_->sample_rate,
+      av_get_channel_layout_nb_channels(aduio_codec_info_->channel_layout),
+      (AVSampleFormat)aduio_codec_info_->format, want_audio_spec_.freq,
+      want_audio_spec_.channels,
+      TransforSDLFormattoFFmpeg((AVSampleFormat)want_audio_spec_.format));
   return ret;
 }
 void Decodec::setAudioQueue(std::shared_ptr<PacketQueue> pkt_queue) {
@@ -92,7 +102,8 @@ void Decodec::VideoThread() {
 Ret Decodec::DecodeVideo(AVPacket *audio_pkt) { return Ret_OK; }
 void Decodec::AudioThread() {
   while (1) {
-    AVPacket *audio_pkt = (AVPacket*)audio_pkt_queue_->Pop();
+    AVPacket *audio_pkt = (AVPacket *)audio_pkt_queue_->Pop();
+    // dump_file_->WriteData(audio_pkt->data, audio_pkt->size);
     DecodeAudio(audio_pkt);
     av_packet_free(&audio_pkt);
   }
@@ -109,7 +120,7 @@ Ret Decodec::DecodeAudio(AVPacket *audio_pkt) {
   int channel_index = 0;
   /* read all the output frames (in general there may be any number of them */
   while (ret >= 0) {
-    //解析出来的是32bit float planar 小端数据
+    // 解析出来的是32bit float planar 小端数据
     ret = avcodec_receive_frame(audio_decodec_ctx_, audio_frame_);
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
       return Ret_ERROR;
@@ -124,18 +135,36 @@ Ret Decodec::DecodeAudio(AVPacket *audio_pkt) {
       return Ret_ERROR;
     }
 
-    // for (samples_index = 0; samples_index < audio_frame_->nb_samples; samples_index++)
-    //   for (channel_index = 0; channel_index < audio_decodec_ctx_->channels;
-    //        channel_index++)
-    //     dump_file_->WriteData(
-    //         audio_frame_->data[channel_index] + data_size * samples_index, data_size);
- 
-        // for (samples_index = 0;samples_index< audio_frame_->nb_samples; samples_index++)
-        // {
-        //     for (channel_index = 0; channel_index < audio_decodec_ctx_->channels; channel_index++)  // 交错的方式写入, 大部分float的格式输出
-        //         fwrite(audio_frame_->data[channel_index] + data_size*samples_index, 1, data_size, outfile);
-        // }
+    // dump_file_->WritePcmData(audio_frame_->data, data_size);
+    if (!(audio_frame_resample_ = AllocOutFrame())) {
+      log_error("Could not allocate audio audio_frame_resample_\n");
+    }
+    // audio_frame_resample_是resample之后的数据，
+    int resample_sample_number = audio_resample_->audio_resampler_send_frame(
+        audio_frame_, audio_frame_resample_);
+    // dump_file_->WritePcmData(audio_frame_resample_->extended_data,
+    //                          resample_sample_number * 2 * 2);
+    audio_frame_queue_->Push(audio_frame_resample_);
   }
+}
+AVFrame *Decodec::AllocOutFrame() {
+  int ret;
+  AVFrame *frame = av_frame_alloc();
+  if (!frame) {
+    return NULL;
+  }
+  frame->nb_samples = want_audio_spec_.samples;
+  frame->channel_layout =
+      av_get_default_channel_layout(want_audio_spec_.channels);
+  frame->format = TransforSDLFormattoFFmpeg(want_audio_spec_.format);
+
+  frame->sample_rate = want_audio_spec_.freq;
+  ret = av_frame_get_buffer(frame, 0);
+  if (ret < 0) {
+    printf("cannot allocate audio data buffer\n");
+    return NULL;
+  }
+  return frame;
 }
 
 Ret Decodec::setAudioAvCodecInfo(AVCodecParameters *dec) {
@@ -204,44 +233,71 @@ Ret Decodec::InitAudio() {
 }
 Ret Decodec::InitVideo() { return Ret_OK; }
 
-
 static void sdl_audio_callback(void *opaque, Uint8 *stream, int len) {
-  Decodec * temp_decoec = (Decodec*)opaque;
-    int len1, audio_size;
+  Decodec *temp_decoec = (Decodec *)opaque;
+  int len1, audio_size;
 
-    static uint8_t audio_buf[(MAX_AUDIO_FRAME_SIZE * 3) / 2];
-    static unsigned int audio_buf_size = 0;
-    static unsigned int audio_buf_index = 0;
+  // static uint8_t audio_buf[(MAX_AUDIO_FRAME_SIZE * 3) / 2];
+  uint8_t *audio_buf = nullptr;
+  static unsigned int audio_buf_size = 0;
+  static unsigned int audio_buf_index = 0;
+  AVFrame *audio_frame = (AVFrame *)temp_decoec->audio_frame_queue_->Pop();
+  audio_buf = audio_frame->data[0];
+ // temp_decoec->dump_file_->WritePcmData(audio_frame->extended_data,audio_frame->nb_samples * 2 * 2);
 
-    while (len > 0) {
-        //通过while循环判断缓冲区大小是否大于0，如果len > 0，说明缓存区stream需要填充数据，那么就判断
-        if (audio_buf_index >= audio_buf_size) {
-            /* We have already sent all our data; get more */
-            //audio缓冲区拷贝索引指针指向buf结尾，说明缓冲区所有数据都已拷贝到stream中，需要重新解码获取帧数据
-      AVFrame *audio_frame = (AVFrame*)temp_decoec->audio_frame_queue_->Pop();
 
-            audio_size = av_samples_get_buffer_size(nullptr,audio_frame->nb_samples,audio_frame->channels,(AVSampleFormat)audio_frame->format,0);
+  audio_size = av_samples_get_buffer_size(nullptr, audio_frame->channels, audio_frame->nb_samples,(AVSampleFormat)audio_frame->format, 0);
+//   log_debug("audio_size:%d\n",audio_size);
+//   log_debug("audio_frame->nb_samples:%d\n",audio_frame->nb_samples);
+//   log_debug("audio_frame->channels:%d\n",audio_frame->channels);
+//   log_debug("audio_frame->format:%d\n",audio_frame->format);
 
-            if (audio_size < 0) {
-                /* If error, output silence */
-                audio_buf_size = 1024; // arbitrary?
-                memset(audio_buf, 0, audio_buf_size);
-            }
-            else {
-                //解码成功，则记录buf大小
-                audio_buf_size = audio_size;
-            }
-            //重置buf索引为0
-            audio_buf_index = 0;
-        }
-        //记录buf数据字节总数
-        len1 = audio_buf_size - audio_buf_index;
-        if (len1 > len)  //如果buf数据大于缓存区大小
-            len1 = len; //先拷贝缓冲区大小的数据
-        memcpy(stream, (uint8_t *)audio_buf + audio_buf_index, len1); //拷贝固定大小的数据
-        len -= len1;  //记录下次需要拷贝的字节数
-        stream += len1; //stream后移len1字节
-        audio_buf_index += len1; //buf索引值后移len1字节
-    }
+   while (len > 0) {
+     // 通过while循环判断缓冲区大小是否大于0，如果len >
+     // 0，说明缓存区stream需要填充数据，那么就判断
+     if (audio_buf_index >= audio_buf_size) {
+       /* We have already sent all our data; get more */
+       //
+       //audio缓冲区拷贝索引指针指向buf结尾，说明缓冲区所有数据都已拷贝到stream中，需要重新解码获取帧数据
 
+      
+         //audio_size = audio_frame->nb_samples *audio_frame->channels*2;
+
+       if (audio_size < 0) {
+         /* If error, output silence */
+         audio_buf_size = 1024; // arbitrary?
+         memset(audio_buf, 0, audio_buf_size);
+       } else {
+         // 解码成功，则记录buf大小
+         audio_buf_size = audio_size;
+       }
+       // 重置buf索引为0
+       audio_buf_index = 0;
+     }
+     // 记录buf数据字节总数
+     len1 = audio_buf_size - audio_buf_index;
+     if (len1 > len) { // 如果buf数据大于缓存区大小
+       len1 = len;     // 先拷贝缓冲区大小的数据
+     }
+     memcpy(stream, (uint8_t *)audio_buf + audio_buf_index,
+            len1);            // 拷贝固定大小的数据
+     len -= len1;             // 记录下次需要拷贝的字节数
+     stream += len1;          // stream后移len1字节
+     audio_buf_index += len1; // buf索引值后移len1字节
+   }
+}
+
+AVSampleFormat Decodec::TransforSDLFormattoFFmpeg(int SDL_format) {
+  switch (SDL_format) {
+  case AUDIO_S16SYS:
+    return AV_SAMPLE_FMT_S16;
+  case AUDIO_S32SYS:
+    return AV_SAMPLE_FMT_S32;
+  case AUDIO_S16MSB:
+    return AV_SAMPLE_FMT_S16;
+  case AUDIO_U8:
+    return AV_SAMPLE_FMT_U8;
+  default:
+    return AV_SAMPLE_FMT_NONE;
   }
+}

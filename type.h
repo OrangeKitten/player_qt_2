@@ -6,4 +6,13 @@ enum Ret {
     Ret_ERROR = -1,
     Ret_ERROR_EXIT = -2,
 };
+
+typedef struct AUDIO_INFO {
+    int freq;
+    int channels;
+    int format;
+    int samples;
+    int silence;
+    void *userdata;
+}Auido_Info;
 #endif

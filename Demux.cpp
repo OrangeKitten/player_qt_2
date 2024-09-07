@@ -1,5 +1,5 @@
-#include "Demux.h"
-
+#include "demux.h"
+#include "file_dump.h"
 extern "C" {
 #include "log.h"
 }
@@ -73,9 +73,15 @@ int Demux::OpenFile() {
       av_find_best_stream(format_ctx_, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
   audio_stream_ = format_ctx_->streams[audio_stream_index_];
   video_stream_ = format_ctx_->streams[video_stream_index_];
-
+  AUDIO_INFO audio_info;
+  audio_info.channels = audio_stream_->codecpar->channels;
+  audio_info.format = audio_stream_->codecpar->format;
+  audio_info.freq = audio_stream_->codecpar->sample_rate;
+  audio_info.samples = audio_stream_->codecpar->frame_size;
+  setAudioInfo(audio_info);
   // DumpMedioInfo();
 }
+
 Demux::~Demux() {
   if (read_packet_thread_->joinable()) {
     read_packet_thread_->join();

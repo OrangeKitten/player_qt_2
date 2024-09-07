@@ -2,7 +2,7 @@
 #ifndef __VIDEO_PLAYER_H__
 #define __VIDEO_PLAYER_H__
 
-#include"Demux.h"
+#include"demux.h"
 #include <memory>
 #include "type.h"
 #include "decodec.h"

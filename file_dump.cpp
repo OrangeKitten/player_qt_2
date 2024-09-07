@@ -2,7 +2,8 @@
 extern "C" {
 #include "log.h"
 }
-
+Auido_Info audio_info_ = {};
+void setAudioInfo(const Auido_Info &audio_info) { audio_info_ = audio_info; }
 const int sampling_frequencies[] = {
     96000, // 0x0
     88200, // 0x1
@@ -60,33 +61,30 @@ void FileDump::WriteBitStream(const AVPacket *data, int size) {
   }
 }
 
-void FileDump::WriteData(const void *data, int size) {
-#if 0 
-    //在容器格式是mp4的时候，dump aac数据需要手动加包头
-    if(format_ == AV_CODEC_ID_AAC) {
-          char adts_header_buf[7] = {0};
-            adts_header(adts_header_buf, audio_pkt->size,
-                        1,
-                        44100,
-                        2);
-            //printf("codecparID = %d\n",ifmt_ctx->streams[audio_index]->codecpar->codec_type);
-            fwrite(adts_header_buf, 1, 7, file_);  // 写adts header , ts流不适用，ts流分离出来的packet带了adts header
-            int len = fwrite( audio_pkt->data, 1, audio_pkt->size, file_);   // 写adts data
-            if(len != audio_pkt->size)
-            {
-                log_error(NULL, AV_LOG_DEBUG, "warning, length of writed data isn't equal audio_pkt.size(%d, %d)\n",
-                       len,
-                       audio_pkt->size);
-            }
+void FileDump::WritePcmPlanarData(uint8_t *data[], int size_per_sample) {
+  /**
+      P表示Planar（平面），其数据格式排列方式为 :
+      LLLLLLRRRRRRLLLLLLRRRRRRLLLLLLRRRRRRL...（每个LLLLLLRRRRRR为一个音频帧）
+   注意planar格式通常是ffmpeg内部使用格式
+      而不带P的数据格式（即交错排列）排列方式为：
+      LRLRLRLRLRLRLRLRLRLRLRLRLRLRLRLRLRLRL...（每个LR为一个音频样本）
+   播放范例：   `
+    */
 
+    for (int i = 0; i < audio_info_.samples; i++) {
+      for (int ch = 0; ch < audio_info_.channels;
+           ch++) // 交错的方式写入, 大部分float的格式输出
+        fwrite(data[ch] + size_per_sample * i, 1, size_per_sample, file_);
+      fflush(file_);
     }
-#endif
-  int len = fwrite(data, 1, size, file_); 
-  if (len !=size) {
-    log_error(NULL, AV_LOG_DEBUG,
-              "warning, length of writed data isn't equal pkt.size(%d, %d)\n",
-              len,size);
-  }
+  
+}
+
+void FileDump::WritePcmData(uint8_t *data[], int size_totol_sample) {
+
+    fwrite(data[0], 1, size_totol_sample, file_);
+    fflush(file_);
+
 }
 
 int FileDump::adts_header(char *const p_adts_header, const int data_length,
@@ -143,4 +141,17 @@ int FileDump::adts_header(char *const p_adts_header, const int data_length,
   //    表示ADTS帧中有number_of_raw_data_blocks_in_frame + 1个AAC原始帧。
 
   return 0;
+}
+
+bool FileDump::is_audio_format_planar() {
+  // 检查每个声道的指针是否不同
+  if (audio_info_.format == AV_SAMPLE_FMT_U8P ||
+      audio_info_.format == AV_SAMPLE_FMT_S16P ||
+      audio_info_.format == AV_SAMPLE_FMT_S32P ||
+      audio_info_.format == AV_SAMPLE_FMT_FLTP ||
+      audio_info_.format == AV_SAMPLE_FMT_DBLP ||
+      audio_info_.format == AV_SAMPLE_FMT_S64P) {
+    return true;
+  }
+  return false;
 }

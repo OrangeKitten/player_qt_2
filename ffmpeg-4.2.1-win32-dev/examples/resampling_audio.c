@@ -1,30 +1,3 @@
-/*
- * Copyright (c) 2012 Stefano Sabatini
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-/**
- * @example resampling_audio.c
- * libswresample API use example.
- */
-
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/samplefmt.h>
@@ -60,24 +33,11 @@ static int get_format_from_sample_fmt(const char **fmt,
 }
 
 /**
- * Fill dst buffer with nb_samples, generated starting from t.
+ * 利用SwrContext结构体进行音频重采样
+ * @param argc 命令行参数的数量
+ * @param argv 命令行参数的数组
+ * @return 返回程序运行的状态，0表示成功，-1表示失败
  */
-static void fill_samples(double *dst, int nb_samples, int nb_channels, int sample_rate, double *t)
-{
-    int i, j;
-    double tincr = 1.0 / sample_rate, *dstp = dst;
-    const double c = 2 * M_PI * 440.0;
-
-    /* generate sin tone with 440Hz frequency and duplicated channels */
-    for (i = 0; i < nb_samples; i++) {
-        *dstp = sin(c * *t);
-        for (j = 1; j < nb_channels; j++)
-            dstp[j] = dstp[0];
-        dstp += nb_channels;
-        *t += tincr;
-    }
-}
-
 int main(int argc, char **argv)
 {
     int64_t src_ch_layout = AV_CH_LAYOUT_STEREO, dst_ch_layout = AV_CH_LAYOUT_SURROUND;
@@ -95,7 +55,7 @@ int main(int argc, char **argv)
     double t;
     int ret;
 
-    if (argc != 2) {
+    if (argc!= 2) {
         fprintf(stderr, "Usage: %s output_file\n"
                 "API example program to show how to resample an audio stream with libswresample.\n"
                 "This program generates a series of audio frames, resamples them to a specified "
@@ -145,70 +105,98 @@ int main(int argc, char **argv)
     }
 
     /* compute the number of converted samples: buffering is avoided
-     * ensuring that the output buffer will contain at least all the
-     * converted input samples */
-    max_dst_nb_samples = dst_nb_samples =
-        av_rescale_rnd(src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
+    dst_nb_samples = av_rescale_rnd(src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
+    max_dst_nb_samples = dst_nb_samples; */
 
-    /* buffer is going to be directly written to a rawaudio file, no alignment */
-    dst_nb_channels = av_get_channel_layout_nb_channels(dst_ch_layout);
+    /* allocate destination samples buffer */
+
+  // 根据计算出的最大目标样本数，为目标样本数据分配内存，并返回一个指针数组 dst_data，以及每行数据的大小 dst_linesize
     ret = av_samples_alloc_array_and_samples(&dst_data, &dst_linesize, dst_nb_channels,
-                                             dst_nb_samples, dst_sample_fmt, 0);
+                                             max_dst_nb_samples, dst_sample_fmt, 0);
+  // 如果内存分配失败，打印错误信息，并跳转到 end 标签，释放资源并退出程序
     if (ret < 0) {
         fprintf(stderr, "Could not allocate destination samples\n");
         goto end;
     }
 
+    /* generate synthetic audio data */
+
+    // 初始化时间变量 t 为0
     t = 0;
-    do {
-        /* generate synthetic audio */
-        fill_samples((double *)src_data[0], src_nb_samples, src_nb_channels, src_rate, &t);
+    // 调用 fill_samples 函数生成音频数据
+    fill_samples(src_data[0], src_nb_samples, src_nb_channels, src_rate, &t);
 
-        /* compute destination number of samples */
-        dst_nb_samples = av_rescale_rnd(swr_get_delay(swr_ctx, src_rate) +
-                                        src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
-        if (dst_nb_samples > max_dst_nb_samples) {
-            av_freep(&dst_data[0]);
-            ret = av_samples_alloc(dst_data, &dst_linesize, dst_nb_channels,
-                                   dst_nb_samples, dst_sample_fmt, 1);
-            if (ret < 0)
-                break;
-            max_dst_nb_samples = dst_nb_samples;
-        }
+    /* resample */
 
-        /* convert to destination format */
-        ret = swr_convert(swr_ctx, dst_data, dst_nb_samples, (const uint8_t **)src_data, src_nb_samples);
+    // 将转换后的样本数初始化为 0
+    dst_nb_samples = 0;
+    // 当源音频数据缓冲区（src_data）中还有样本时，循环执行重采样操作
+    while (src_nb_samples > 0) {
+      // 调用 swr_convert 函数进行音频重采样
+        ret = swr_convert(swr_ctx, dst_data, max_dst_nb_samples, (const uint8_t **)src_data, src_nb_samples);
+      // 如果重采样过程中发生错误，打印错误信息，并跳转到 end 标签
         if (ret < 0) {
             fprintf(stderr, "Error while converting\n");
             goto end;
         }
-        dst_bufsize = av_samples_get_buffer_size(&dst_linesize, dst_nb_channels,
-                                                 ret, dst_sample_fmt, 1);
-        if (dst_bufsize < 0) {
-            fprintf(stderr, "Could not get sample buffer size\n");
+      // 获取实际转换后的样本数
+        dst_nb_samples = ret;
+      // 源音频数据缓冲区的样本数减少实际转换后的样本数
+        src_nb_samples -= ret;
+      // 移动源音频数据缓冲区的指针，指向下一个未处理的样本位置
+        src_data += ret * src_nb_channels;
+      // 释放之前分配的源音频数据缓冲区内存
+        av_freep(&src_data);
+      // 重新分配源音频数据缓冲区内存，以包含新的样本数据
+        ret = av_samples_alloc(src_data, &src_linesize, src_nb_channels,
+                               dst_nb_samples, src_sample_fmt, 1);
+      // 如果内存分配失败，打印错误信息，并跳转到 end 标签
+        if (ret < 0) {
+            fprintf(stderr, "Could not reallocate source samples\n");
             goto end;
         }
-        printf("t:%f in:%d out:%d\n", t, src_nb_samples, ret);
-        fwrite(dst_data[0], 1, dst_bufsize, dst_file);
-    } while (t < 10);
+      // 移动目标音频数据缓冲区的指针，指向下一个未写入的样本位置
+        dst_data += dst_nb_samples * dst_nb_channels;
+      // 计算当前目标音频数据缓冲区中还能容纳的最大样本数
+        max_dst_nb_samples -= dst_nb_samples;
+    }
 
-    if ((ret = get_format_from_sample_fmt(&fmt, dst_sample_fmt)) < 0)
+    /* write the resampled audio data to the output file */
+
+    // 根据目标样本格式获取数据格式字符串
+    fmt = av_get_sample_fmt_name(dst_sample_fmt);
+    // 如果获取格式字符串失败，打印错误信息，并跳转到 end 标签
+    if (!fmt) {
+        fprintf(stderr, "Could not get sample format string\n");
         goto end;
-    fprintf(stderr, "Resampling succeeded. Play the output file with the command:\n"
-            "ffplay -f %s -channel_layout %"PRId64" -channels %d -ar %d %s\n",
-            fmt, dst_ch_layout, dst_nb_channels, dst_rate, dst_filename);
+    }
+    // 打印一条消息，显示正在写入输出文件
+    printf("Writing data to file %s\n", dst_filename);
+    // 计算目标音频数据缓冲区的数据大小，以字节为单位
+    dst_bufsize = av_samples_get_buffer_size(&dst_linesize, dst_nb_channels, dst_nb_samples, dst_sample_fmt, 1);
+    // 将目标音频数据缓冲区的数据写入到输出文件中
+    fwrite(dst_data[0], 1, dst_bufsize, dst_file);
 
-end:
+    /* free the allocated memory */
+
+    // 关闭输出文件
     fclose(dst_file);
-
-    if (src_data)
-        av_freep(&src_data[0]);
-    av_freep(&src_data);
-
-    if (dst_data)
-        av_freep(&dst_data[0]);
+    // 释放 SwrContext 上下文结构体
+    swr_free(&swr_ctx);
+    // 释放目标音频数据缓冲区内存
     av_freep(&dst_data);
 
-    swr_free(&swr_ctx);
-    return ret < 0;
+    return 0;
+
+end:
+    if (dst_file)
+        fclose(dst_file);
+    if (swr_ctx)    
+        swr_free(&swr_ctx);
+    if (src_data)   
+        av_freep(&src_data);
+    if (dst_data)   
+        av_freep(&dst_data);
+
+    return ret;
 }
