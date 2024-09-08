@@ -184,7 +184,7 @@ void Demux::ReadPacketThread() {
       audio_pkt_queue_->Push(pkt);
     } else if (pkt->stream_index == video_stream_index_) {
       // log_debug("Push video pkt size = %d",pkt->size);
-      video_pkt_queue_->Push(pkt);
+     // video_pkt_queue_->Push(pkt);
     }
     write_size_ += pkt->size;
   }

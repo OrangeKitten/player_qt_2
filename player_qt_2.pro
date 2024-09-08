@@ -4,7 +4,6 @@ CONFIG -= app_bundle
 CONFIG -= qt
 CONFIG -= -D__STDC_FORMAT_MACROS
 
-
 SOURCES += *.cpp\
             *.c
 

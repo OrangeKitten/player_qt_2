@@ -23,7 +23,7 @@
 #include "log.h"
 
 #define MAX_CALLBACKS 32
-
+#include <pthread.h>
 typedef struct {
   log_LogFn fn;
   void *udata;
@@ -59,9 +59,11 @@ static void stdout_callback(log_Event *ev) {
     buf, level_colors[ev->level], level_strings[ev->level],
     ev->file, ev->line);
 #else
-  fprintf(
-    ev->udata, "%s %-5s %s:%d: ",
-    buf, level_strings[ev->level], ev->file, ev->line);
+pthread_t thread_id = pthread_self();
+fprintf(
+ ev->udata, "%s Thread ID: %ld %-5s %s:%d: ",
+ buf, thread_id, level_strings[ev->level], ev->file, ev->line);
+
 #endif
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");

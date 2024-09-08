@@ -4,7 +4,6 @@
 #include <condition_variable>
 #include <queue>
 #include <mutex>
-#include <atomic>
 
 extern "C"
 {
@@ -13,7 +12,7 @@ extern "C"
 
 class PacketQueue {
 public:
-  PacketQueue(int max_size);
+  PacketQueue();
   ~PacketQueue();
   void Push(void *pkt);
   void* Pop();
@@ -21,15 +20,14 @@ public:
   int Size();
   bool Empty();
 //  void Clear();
-bool Full() ;
+  void wait();
+  void notify();
 
 
 private:
   std::mutex mutex_;
   std::condition_variable condition_;
-  // std::condition_variable not_full_condition_;
   std::queue< void*> packets_queue_;
-  std::atomic<int>  queue_size_;
-  int max_size_;
+  int queue_size_;
 };
 #endif
