@@ -259,7 +259,7 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len) {
        /* We have already sent all our data; get more */
        //
        //audio缓冲区拷贝索引指针指向buf结尾，说明缓冲区所有数据都已拷贝到stream中，需要重新解码获取帧数据
-
+z
       
          //audio_size = audio_frame->nb_samples *audio_frame->channels*2;
 
