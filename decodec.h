@@ -32,7 +32,7 @@ private:
   Ret InitAudio();
   Ret InitVideo();
   Ret DecodeAudio(AVPacket*audio_pkt);
-  Ret DecodeVideo(AVPacket*audio_pkt);
+  Ret DecodeVideo(AVPacket*video_pkt);
  Ret InitSDL();
  AVFrame * AllocOutFrame();
  AVSampleFormat TransforSDLFormattoFFmpeg(int SDL_format);
@@ -46,7 +46,13 @@ private:
   AVCodecParameters * video_codec_info_;
  
   AVCodecContext * audio_decodec_ctx_;
-  AVCodec *decodec_;
+  AVCodecContext *video_decodec_ctx_ ;
+
+  AVCodec *audio_decodec_;
+  AVCodec *video_decodec_;
+
+  AVFrame *video_frame_;
+
   AVFrame *audio_frame_;
   AVFrame *audio_frame_resample_;
   int sdl_flag_;

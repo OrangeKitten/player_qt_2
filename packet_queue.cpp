@@ -29,7 +29,7 @@ void PacketQueue::Push(void *pkt) {
 
      packets_queue_.push(pkt);
     queue_size_++;
-    log_debug("push queue_size = %d", queue_size_.load());
+   // log_debug("push queue_size = %d", queue_size_.load());
 
     }
 
@@ -50,7 +50,7 @@ std::unique_lock<std::mutex> lock(mutex_);
     pkt = packets_queue_.front();
     packets_queue_.pop();
     queue_size_--;
-    log_debug("pop queue_size = %d", queue_size_.load());
+   // log_debug("pop queue_size = %d", queue_size_.load());
      }
     
 
