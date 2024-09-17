@@ -11,3 +11,7 @@
   - 添加`resample`  模块，目前是把resample后的数据写死为format 16bit\channel 2\nb_sample 1024\sample_rat 48hz
   - 目前audio 解码前后的队列都是无阻塞的，也就是说他会把文件中的全部数据一口气都Push进来，这样会导致内存占用较大，下个版本会对其进行优化
   - 该版本支持音频的播放
+
+- 24/09/17
+    - dump video数据可以正常播放
+    - 实现阻塞队列 packet queue 限制25，video frame queue 限制3 video frame queue限制8
