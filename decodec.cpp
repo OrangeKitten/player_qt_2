@@ -100,14 +100,14 @@ void Decodec::StartDecode() {
   DumpAudioCodecInfo();
   audio_decode_thread_ =
       std::make_unique<std::thread>(&Decodec::AudioThread, this);
-  // video_decode_thread_ =
-  //     std::make_unique<std::thread>(&Decodec::VideoThread, this);
+   video_decode_thread_ =
+       std::make_unique<std::thread>(&Decodec::VideoThread, this);
 }
 
 void Decodec::VideoThread() {
   while (1) {
     AVPacket *video_pkt = (AVPacket *)video_pkt_queue_->Pop();
-    DecodeAudio(video_pkt);
+    DecodeVideo(video_pkt);
     av_packet_free(&video_pkt);
   }
 }
@@ -118,8 +118,6 @@ Ret Decodec::DecodeVideo(AVPacket *video_pkt) {
     log_error("Failed to send packet to decoder\n");
     return Ret_ERROR;
   }
-  int data_size = 0;
-  int channel_index = 0;
   /* read all the output frames (in general there may be any number of them */
   while (ret >= 0) {
     // 解析出来的是32bit float planar 小端数据
@@ -130,8 +128,8 @@ Ret Decodec::DecodeVideo(AVPacket *video_pkt) {
       log_error("Error during decoding\n");
       return Ret_ERROR;
     }
-    dump_file_->WritePcmData(video_frame_->data, data_size);
-    audio_frame_queue_->Push(audio_frame_resample_);
+   dump_file_->WriteVideoYUV420PData(video_frame_);
+   // video_frame_queue_->Push(video_frame_);
   }
 }
 void Decodec::AudioThread() {

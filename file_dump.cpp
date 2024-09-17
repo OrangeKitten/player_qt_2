@@ -155,3 +155,13 @@ bool FileDump::is_audio_format_planar() {
   }
   return false;
 }
+
+void FileDump::WriteVideoYUV420PData(AVFrame *videoFrame) {
+    for(int j=0; j<videoFrame->height; j++)
+            fwrite(videoFrame->data[0] + j * videoFrame->linesize[0], 1, videoFrame->width, file_);
+        for(int j=0; j<videoFrame->height/2; j++)
+            fwrite(videoFrame->data[1] + j * videoFrame->linesize[1], 1, videoFrame->width/2, file_);
+        for(int j=0; j<videoFrame->height/2; j++)
+            fwrite(videoFrame->data[2] + j * videoFrame->linesize[2], 1, videoFrame->width/2, file_);
+
+}

@@ -14,6 +14,7 @@ public:
   void WriteBitStream(const AVPacket *data, int size);
   void WritePcmData(uint8_t *data[], int size_totol_sample);
   void WritePcmPlanarData(uint8_t *data[], int size_per_sample);
+  void WriteVideoYUV420PData(AVFrame *videoFrame);
 
 private:
   int adts_header(char *const p_adts_header, const int data_length,

@@ -7,7 +7,7 @@
 //for SDL
 #undef main
  int main() {
-     char * url = "believe.ts";
+     char * url = "audio48hz.mp4";
   VideoPlayer videoplay(url);
   videoplay.init();
   videoplay.Play();
