@@ -42,6 +42,7 @@
         "deque": "cpp",
         "memory": "cpp",
         "thread": "cpp",
-        "atomic": "cpp"
+        "atomic": "cpp",
+        "cstring": "cpp"
     }
 }

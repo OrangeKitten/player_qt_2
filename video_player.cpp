@@ -10,7 +10,7 @@ VideoPlayer::VideoPlayer (char *url)
      position_ =-1;
      volume_ =-1;
      url_ = url;
-    
+
 }
 
 Ret  VideoPlayer::init(){
@@ -22,8 +22,8 @@ AVCodecParameters *video_dec = (AVCodecParameters*)malloc(sizeof(AVCodecParamete
 demux_->getAudioAvCodecInfo(audio_dec);
 demux_->getVideoAvCodecInfo(video_dec);
 //创建AvpacketQueue
-audio_pkt_queue_ = std::make_shared<PacketQueue>(MaxPack);
-video_pkt_queue_ = std::make_shared<PacketQueue>(MaxPack);
+audio_pkt_queue_ = std::make_shared<PacketQueue>(MaxPack,"audiopkt");
+video_pkt_queue_ = std::make_shared<PacketQueue>(MaxPack,"videopkt");
 demux_->setAudioQueue(audio_pkt_queue_);
 demux_->setVideoQueue(video_pkt_queue_);
 decodec_->setAudioQueue(audio_pkt_queue_);
@@ -49,6 +49,9 @@ void VideoPlayer::Play()
 {
     demux_->StartReadPacket();
     decodec_->StartDecode();
+        // 打开 YUV 文件
+    decodec_->VideoRendorThread();
+
 }
 //void VideoPlayer::Stop()
 //{

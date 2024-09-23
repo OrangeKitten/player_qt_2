@@ -22,7 +22,7 @@ Demux::Demux(char *url) {
 }
 
 int Demux::OpenFile() {
-  // AVFormatContext是描述一个媒体文件或媒体流的构成和基本信息的结构体 
+  // AVFormatContext是描述一个媒体文件或媒体流的构成和基本信息的结构体
   // 打开文件，主要是探测协议类型，如果是网络文件则创建网络链接
   int ret = avformat_open_input(&format_ctx_, url_, NULL, NULL);
   if (ret < 0) // 如果打开媒体文件失败，打印失败原因
@@ -181,7 +181,7 @@ void Demux::ReadPacketThread() {
 
     if (pkt->stream_index == audio_stream_index_) {
       // log_debug("Push audio pkt size = %d",pkt->size);
-      audio_pkt_queue_->Push(pkt);
+     audio_pkt_queue_->Push(pkt);
     } else if (pkt->stream_index == video_stream_index_) {
       // log_debug("Push video pkt size = %d",pkt->size);
      video_pkt_queue_->Push(pkt);

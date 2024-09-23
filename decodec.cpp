@@ -9,14 +9,14 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
 #define AUDIOFRAME 8
 #define VIDEOFRAME 3
 Decodec::Decodec() {
-  dump_file_ = std::make_unique<FileDump>("audio.pcm");
-  
+  dump_file_ = std::make_unique<FileDump>("video.yuv");
+
   if (!(audio_frame_ = av_frame_alloc())) {
     log_error("Could not allocate audio audio_frame_\n");
   }
-  if (!(video_frame_ = av_frame_alloc())) {
-    log_error("Could not allocate audio video_frame_\n");
-  }
+  // if (!(video_frame_ = av_frame_alloc())) {
+  //   log_error("Could not allocate audio video_frame_\n");
+  // }
 
   aduio_codec_info_ = (AVCodecParameters *)malloc(sizeof(AVCodecParameters));
   video_codec_info_ = (AVCodecParameters *)malloc(sizeof(AVCodecParameters));
@@ -26,20 +26,30 @@ Decodec::Decodec() {
   audio_decodec_ = nullptr;
   video_decodec_ = nullptr;
   audio_frame_resample_ = nullptr;
-
-  if (InitSDL() != Ret_OK) {
-    log_error("init sdl failed");
-  }
-  audio_resample_ = std::make_unique<AudioReSample>();
 }
 
 Ret Decodec::InitSDL() {
-  sdl_flag_ = SDL_INIT_AUDIO;
+  sdl_flag_ = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
   if (SDL_Init(sdl_flag_) < 0) {
     log_error("Could not initialize SDL - %s\n", SDL_GetError());
-    log_error("(Did you set the DISPLAY variable?)\n");
+    log_error("(Did you set  the DISPLAY variable?)\n");
     return Ret_ERROR;
   }
+
+  if (InitVideoSDL() != Ret_OK) {
+    log_error("init sdl video failed");
+    return Ret_ERROR;
+  }
+  // InitAuido要在InitVideo之后执行具体原因不清楚
+ if (InitAudioSDL() != Ret_OK) {
+   log_error("init sdl audio failed");
+   return Ret_ERROR;
+ }
+
+  return Ret_OK;
+}
+
+Ret Decodec::InitAudioSDL() {
   // ToDo 目前写死
   want_audio_spec_.freq = 48000;
   // want_audio_spec_.format = AV_SAMPLE_FMT_S16; // ffmpeg定义
@@ -60,6 +70,103 @@ Ret Decodec::InitSDL() {
   SDL_PauseAudioDevice(audio_dev, 0);
   return Ret_OK;
 }
+Ret Decodec::InitVideoSDL() {
+  default_window_width_ = 640;
+  default_window_height_ = 480;
+  alwaysontop_ = false; // 始终置顶
+  borderless_ = false;  // 无边框
+  window_ = nullptr;
+#if SDL_VERSION_ATLEAST(2, 0, 5)
+  sdl_flag_ |= SDL_WINDOW_ALWAYS_ON_TOP;
+#else
+  log_debug("Your SDL version doesn't support SDL_WINDOW_ALWAYS_ON_TOP.Feature "
+            "will be inactive");
+#endif
+ if (borderless_)
+   sdl_flag_ |= SDL_WINDOW_BORDERLESS;
+ else
+   sdl_flag_ |= SDL_WINDOW_RESIZABLE;
+
+ window_ = SDL_CreateWindow("Big Fat Player", SDL_WINDOWPOS_UNDEFINED,
+                            SDL_WINDOWPOS_UNDEFINED, video_codec_info_->width,
+                            video_codec_info_->height, SDL_WINDOW_SHOWN);
+ // 告诉 SDL 在渲染器缩放纹理时，使用线性插值方法进行过滤
+ SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+ if (window_) {
+   // 创建renderer
+   renderer_ = SDL_CreateRenderer(
+       window_, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+   if (!renderer_) {
+     log_error("Failed to initialize a hardware accelerated renderer: %s\n",
+               SDL_GetError());
+     renderer_ = SDL_CreateRenderer(window_, -1, 0);
+   }
+   if (renderer_) {
+     if (!SDL_GetRendererInfo(renderer_, &renderer_info_))
+       log_debug(NULL, AV_LOG_VERBOSE, "Initialized %s renderer.\n",
+                 renderer_info_.name);
+   }
+ }
+ video_texture_ = SDL_CreateTexture(
+     renderer_, SDL_PIXELFORMAT_IYUV, SDL_TEXTUREACCESS_STREAMING,
+     video_codec_info_->width, video_codec_info_->height);
+ if (!window_ || !renderer_ || !renderer_info_.num_texture_formats ||
+     !video_texture_) {
+   log_debug("Failed to create window or renderer: %s", SDL_GetError());
+   return Ret_ERROR;
+ }
+//  video_rendor_thread_ =
+//      std::make_unique<std::thread>(&Decodec::VideoRendorThread, this);
+  return Ret_OK;
+}
+void cleanup(SDL_Window *window, SDL_Renderer *renderer, SDL_Texture *texture, AVCodecContext *pCodecContext, AVFormatContext *pFormatContext) {
+    if (texture) SDL_DestroyTexture(texture);
+    if (renderer) SDL_DestroyRenderer(renderer);
+    if (window) SDL_DestroyWindow(window);
+    if (pCodecContext) avcodec_free_context(&pCodecContext);
+    if (pFormatContext) avformat_close_input(&pFormatContext);
+    SDL_Quit();
+}
+void Decodec::VideoRendorThread() {
+
+  int ret = 0;
+  while (1) {
+    AVFrame *video_frame = (AVFrame *)video_frame_queue_->Pop();
+    //dump_file_->WriteVideoYUV420PData(video_frame);
+    log_debug(" \n");
+    if (video_frame) {
+        log_debug("SDL_UpdateYUVTexture");
+      ret = SDL_UpdateYUVTexture(video_texture_, nullptr, video_frame->data[0],
+                                 video_frame->linesize[0], video_frame->data[1],
+                                 video_frame->linesize[1], video_frame->data[2],
+                                 video_frame->linesize[2]);
+        // SDL_UpdateTexture(video_texture_, NULL, video_frame->data[0], video_frame->linesize[0]);
+      if (ret < 0) {
+        log_error("Failed to SDL_UpdateYUVTexture: %s", SDL_GetError());
+      }
+        log_debug("SDL_RenderClear");
+      ret = SDL_RenderClear(renderer_);
+      if (ret < 0) {
+        log_error("Failed to SDL_RenderClear %s", SDL_GetError());
+      }
+       log_debug("SDL_RenderCopy");
+      ret = SDL_RenderCopy(renderer_, video_texture_, nullptr, nullptr);
+      if (ret < 0) {
+        log_error("Failed to render texture: %s", SDL_GetError());
+      }
+       log_debug("SDL_RenderPresent");
+      SDL_RenderPresent(renderer_);
+      SDL_Delay(40); // 控制帧率大约为 25fps (1000ms / 25 = 40ms)
+                      SDL_Event event;
+      SDL_PollEvent(&event);
+                if (event.type == SDL_QUIT) {
+                    av_frame_free(&video_frame);
+                  
+                }
+      av_frame_free(&video_frame);
+    }
+  }
+}
 Decodec::~Decodec() {
   if (audio_decode_thread_->joinable()) {
     audio_decode_thread_->join();
@@ -67,18 +174,29 @@ Decodec::~Decodec() {
   if (video_decode_thread_->joinable()) {
     video_decode_thread_->join();
   }
+  if (video_rendor_thread_->joinable()) {
+    video_rendor_thread_->join();
+  }
 
   free(aduio_codec_info_);
   free(video_codec_info_);
+  SDL_DestroyTexture(video_texture_);
+  SDL_DestroyRenderer(renderer_);
+  SDL_DestroyWindow(window_);
   av_frame_free(&audio_frame_);
   // av_frame_free(&audio_frame_resample_);
 }
 Ret Decodec::Init() {
   Ret ret = Ret_OK;
-  audio_frame_queue_ = std::make_shared<PacketQueue>(AUDIOFRAME);
-  video_frame_queue_ = std::make_shared<PacketQueue>(VIDEOFRAME);
+  audio_frame_queue_ = std::make_shared<PacketQueue>(AUDIOFRAME, "audioframe");
+  video_frame_queue_ = std::make_shared<PacketQueue>(VIDEOFRAME, "vidoeframe");
   ret = InitAudio();
   ret = InitVideo();
+  if (InitSDL() != Ret_OK) {
+    log_error("init sdl failed");
+  }
+
+  audio_resample_ = std::make_unique<AudioReSample>();
   audio_resample_->Init(
       aduio_codec_info_->sample_rate,
       av_get_channel_layout_nb_channels(aduio_codec_info_->channel_layout),
@@ -97,11 +215,11 @@ Ret Decodec::setVolume(int volume) { return Ret_OK; }
 
 void Decodec::StartDecode() {
 
-  DumpAudioCodecInfo();
-  audio_decode_thread_ =
-      std::make_unique<std::thread>(&Decodec::AudioThread, this);
-   video_decode_thread_ =
-       std::make_unique<std::thread>(&Decodec::VideoThread, this);
+//  DumpAudioCodecInfo();
+ audio_decode_thread_ =
+     std::make_unique<std::thread>(&Decodec::AudioThread, this);
+  video_decode_thread_ =
+      std::make_unique<std::thread>(&Decodec::VideoThread, this);
 }
 
 void Decodec::VideoThread() {
@@ -120,16 +238,21 @@ Ret Decodec::DecodeVideo(AVPacket *video_pkt) {
   }
   /* read all the output frames (in general there may be any number of them */
   while (ret >= 0) {
-    // 解析出来的是32bit float planar 小端数据
-    ret = avcodec_receive_frame(video_decodec_ctx_, video_frame_);
+    AVFrame *video_frame = nullptr;
+    if (!(video_frame = av_frame_alloc())) {
+      log_error("Could not allocate audio video_frame_\n");
+    }
+    ret = avcodec_receive_frame(video_decodec_ctx_, video_frame);
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
       return Ret_ERROR;
     else if (ret < 0) {
       log_error("Error during decoding\n");
       return Ret_ERROR;
     }
-   dump_file_->WriteVideoYUV420PData(video_frame_);
-   // video_frame_queue_->Push(video_frame_);
+    video_frame_queue_->Push(video_frame);
+    //dump_file_->WriteVideoYUV420PData(video_frame_);
+   
+
   }
 }
 void Decodec::AudioThread() {
@@ -315,10 +438,10 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len) {
   audio_size = av_samples_get_buffer_size(
       nullptr, audio_frame->channels, audio_frame->nb_samples,
       (AVSampleFormat)audio_frame->format, 0);
-  log_debug("audio_size:%d\n", audio_size);
-  //   log_debug("audio_frame->nb_samples:%d\n",audio_frame->nb_samples);
-  //   log_debug("audio_frame->channels:%d\n",audio_frame->channels);
-  //   log_debug("audio_frame->format:%d\n",audio_frame->format);
+  // log_debug("audio_size:%d\n", audio_size);
+  //    log_debug("audio_frame->nb_samples:%d\n",audio_frame->nb_samples);
+  //    log_debug("audio_frame->channels:%d\n",audio_frame->channels);
+  //    log_debug("audio_frame->format:%d\n",audio_frame->format);
 
   while (len > 0) {
     // 通过while循环判断缓冲区大小是否大于0，如果len >
@@ -352,6 +475,8 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len) {
     stream += len1;          // stream后移len1字节
     audio_buf_index += len1; // buf索引值后移len1字节
   }
+  // 释放解码后push到队列的音频数据
+  av_frame_free(&audio_frame);
 }
 
 AVSampleFormat Decodec::TransforSDLFormattoFFmpeg(int SDL_format) {

@@ -5,7 +5,7 @@
 #include <queue>
 #include <mutex>
 #include <atomic>
-
+#include <string>
 extern "C"
 {
 #include <libavformat/avformat.h>
@@ -13,7 +13,7 @@ extern "C"
 
 class PacketQueue {
 public:
-  PacketQueue(int max_size);
+  PacketQueue(int max_size,std::string queuename);
   ~PacketQueue();
   void Push(void *pkt);
   void* Pop();
@@ -31,5 +31,7 @@ private:
   std::queue< void*> packets_queue_;
   std::atomic<int>  queue_size_;
   int max_size_;
+  std::string quque_name_;
+
 };
 #endif

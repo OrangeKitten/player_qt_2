@@ -5,9 +5,10 @@ extern "C" {
 #include <libavformat/avformat.h>
 }
 
-PacketQueue::PacketQueue(int max_size) {
+PacketQueue::PacketQueue(int max_size,std::string queuename) {
   queue_size_ = 0;
   max_size_ = max_size;
+  quque_name_ = queuename;
 }
 
 PacketQueue::~PacketQueue() { log_debug("PacketQueue Release!"); }
@@ -29,8 +30,7 @@ void PacketQueue::Push(void *pkt) {
 
      packets_queue_.push(pkt);
     queue_size_++;
-   // log_debug("push queue_size = %d", queue_size_.load());
-
+    //log_debug(" %s push queue_size = %d ",quque_name_.c_str(), queue_size_.load());
     }
 
     // 唤醒等待 Pop 的线程
@@ -50,7 +50,7 @@ std::unique_lock<std::mutex> lock(mutex_);
     pkt = packets_queue_.front();
     packets_queue_.pop();
     queue_size_--;
-   // log_debug("pop queue_size = %d", queue_size_.load());
+    //log_debug("%s pop queue_size = %d", quque_name_.c_str(), queue_size_.load());
      }
     
 
