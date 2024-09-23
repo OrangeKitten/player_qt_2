@@ -14,4 +14,7 @@
 
 - 24/09/17
     - dump video数据可以正常播放
-    - 实现阻塞队列 packet queue 限制25，video frame queue 限制3 video frame queue限制8
+    - 实现阻塞队列 packet queue 限制25，video frame queue 限制3 video frame queue限制8    - 实现阻塞队列 packet queue 限制25，视频帧队列限制3 视频帧队列限制8
+
+- 24/09/23
+    - 当前版本可以当场播放，videorender 在主线程播放，并且可以接受SDLEvent
