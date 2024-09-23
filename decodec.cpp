@@ -119,14 +119,7 @@ Ret Decodec::InitVideoSDL() {
 //      std::make_unique<std::thread>(&Decodec::VideoRendorThread, this);
   return Ret_OK;
 }
-void cleanup(SDL_Window *window, SDL_Renderer *renderer, SDL_Texture *texture, AVCodecContext *pCodecContext, AVFormatContext *pFormatContext) {
-    if (texture) SDL_DestroyTexture(texture);
-    if (renderer) SDL_DestroyRenderer(renderer);
-    if (window) SDL_DestroyWindow(window);
-    if (pCodecContext) avcodec_free_context(&pCodecContext);
-    if (pFormatContext) avformat_close_input(&pFormatContext);
-    SDL_Quit();
-}
+
 void Decodec::VideoRendorThread() {
 
   int ret = 0;
@@ -173,9 +166,6 @@ Decodec::~Decodec() {
   }
   if (video_decode_thread_->joinable()) {
     video_decode_thread_->join();
-  }
-  if (video_rendor_thread_->joinable()) {
-    video_rendor_thread_->join();
   }
 
   free(aduio_codec_info_);
