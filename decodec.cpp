@@ -9,7 +9,7 @@ static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
 #define AUDIOFRAME 8
 #define VIDEOFRAME 3
 Decodec::Decodec() {
-  dump_file_ = std::make_unique<FileDump>("video.yuv");
+  dump_file_ = std::make_unique<FileDump>("audio.aac");
 
   if (!(audio_frame_ = av_frame_alloc())) {
     log_error("Could not allocate audio audio_frame_\n");
@@ -56,7 +56,8 @@ Ret Decodec::InitAudioSDL() {
   want_audio_spec_.format = AUDIO_S16LSB; // SDL 定义
   want_audio_spec_.channels = 2;
   want_audio_spec_.silence = 0;
-  want_audio_spec_.samples = 1024;
+  //want_audio_spec_.samples = 1024;
+  want_audio_spec_.samples = aduio_codec_info_->frame_size;
   want_audio_spec_.callback = sdl_audio_callback;
   want_audio_spec_.userdata = this;
   int num = SDL_GetNumAudioDevices(0);
@@ -248,8 +249,8 @@ Ret Decodec::DecodeVideo(AVPacket *video_pkt) {
 void Decodec::AudioThread() {
   while (1) {
     AVPacket *audio_pkt = (AVPacket *)audio_pkt_queue_->Pop();
-    // dump_file_->WriteData(audio_pkt->data, audio_pkt->size);
-    DecodeAudio(audio_pkt);
+   // dump_file_->WriteBitStream(audio_pkt, audio_pkt->size,audio_decodec_ctx_->codec_id);
+   DecodeAudio(audio_pkt);
     av_packet_free(&audio_pkt);
   }
 }
@@ -280,7 +281,8 @@ Ret Decodec::DecodeAudio(AVPacket *audio_pkt) {
       return Ret_ERROR;
     }
 
-    // dump_file_->WritePcmData(audio_frame_->data, data_size);
+   //dump_file_->WritePcmData(audio_frame_->data, data_size);
+    log_debug("audio_frame nb_samples = %d", audio_frame_->nb_samples);
     if (!(audio_frame_resample_ = AllocOutFrame())) {
       log_error("Could not allocate audio audio_frame_resample_\n");
     }
@@ -289,7 +291,7 @@ Ret Decodec::DecodeAudio(AVPacket *audio_pkt) {
         audio_frame_, audio_frame_resample_);
     // dump_file_->WritePcmData(audio_frame_resample_->extended_data,
     //                          resample_sample_number * 2 * 2);
-    audio_frame_queue_->Push(audio_frame_resample_);
+   audio_frame_queue_->Push(audio_frame_resample_);
   }
 }
 AVFrame *Decodec::AllocOutFrame() {

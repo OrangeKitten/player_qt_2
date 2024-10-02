@@ -31,35 +31,68 @@ FileDump::~FileDump() {
     fclose(file_);
   }
 }
-void FileDump::WriteBitStream(const AVPacket *data, int size) {
+void FileDump::WriteBitStream(const AVPacket *data, int size,AVCodecID format) {
   AVPacket *pkt = (AVPacket *)data;
-#if 0 
+#if 1
     //在容器格式是mp4的时候，dump aac数据需要手动加包头
-    if(format_ == AV_CODEC_ID_AAC) {
+    if(format == AV_CODEC_ID_AAC) {
           char adts_header_buf[7] = {0};
-            adts_header(adts_header_buf, audio_pkt->size,
+            adts_header(adts_header_buf, pkt->size,
                         1,
-                        44100,
+                        44100
                         2);
             //printf("codecparID = %d\n",ifmt_ctx->streams[audio_index]->codecpar->codec_type);
             fwrite(adts_header_buf, 1, 7, file_);  // 写adts header , ts流不适用，ts流分离出来的packet带了adts header
-            int len = fwrite( audio_pkt->data, 1, audio_pkt->size, file_);   // 写adts data
-            if(len != audio_pkt->size)
+            int len = fwrite( pkt->data, 1, pkt->size, file_);   // 写adts data
+            if(len != pkt->size)
             {
-                log_error(NULL, AV_LOG_DEBUG, "warning, length of writed data isn't equal audio_pkt.size(%d, %d)\n",
+                log_error(NULL, AV_LOG_DEBUG, "warning, length of writed data isn't equal pkt.size(%d, %d)\n",
                        len,
-                       audio_pkt->size);
+                       pkt->size);
             }
 
     }
-#endif
+#else 0
   int len = fwrite(pkt->data, 1, pkt->size, file_); // 写adts data
   if (len != pkt->size) {
     log_error(NULL, AV_LOG_DEBUG,
               "warning, length of writed data isn't equal pkt.size(%d, %d)\n",
               len, pkt->size);
   }
+  #endif
 }
+
+ void FileDump::WriteBitStream(const AVPacket *data, AVCodecParameters*para) {
+    AVPacket *pkt = (AVPacket *)data;
+#if 1
+    //在容器格式是mp4的时候，dump aac数据需要手动加包头
+    if(para->codec_id == AV_CODEC_ID_AAC) {
+          char adts_header_buf[7] = {0};
+            adts_header(adts_header_buf, pkt->size,
+                        para->profile,
+                        para->sample_rate,
+                        para->channels);
+            //printf("codecparID = %d\n",ifmt_ctx->streams[audio_index]->codecpar->codec_type);
+            fwrite(adts_header_buf, 1, 7, file_);  // 写adts header , ts流不适用，ts流分离出来的packet带了adts header
+            int len = fwrite( pkt->data, 1, pkt->size, file_);   // 写adts data
+            if(len != pkt->size)
+            {
+                log_error(NULL, AV_LOG_DEBUG, "warning, length of writed data isn't equal pkt.size(%d, %d)\n",
+                       len,
+                       pkt->size);
+            }
+
+    }
+#else 0
+  int len = fwrite(pkt->data, 1, pkt->size, file_); // 写adts data
+  if (len != pkt->size) {
+    log_error(NULL, AV_LOG_DEBUG,
+              "warning, length of writed data isn't equal pkt.size(%d, %d)\n",
+              len, pkt->size);
+  }
+  #endif
+
+ }
 
 void FileDump::WritePcmPlanarData(uint8_t *data[], int size_per_sample) {
   /**

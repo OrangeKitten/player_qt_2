@@ -6,6 +6,8 @@
 #include <memory>
 #include <thread>
 #include "type.h"
+#include "file_dump.h"
+
 extern "C"
 {
 #include <libavformat/avformat.h>
@@ -40,6 +42,7 @@ private:
     std::unique_ptr<std::thread> read_packet_thread_;
     int read_size_;
     int write_size_;
+     std::unique_ptr<FileDump>  dump_file_;
 
 };
 #endif // DEMUX_H

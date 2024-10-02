@@ -15,6 +15,7 @@ Demux::Demux(char *url) {
   read_size_ = 0;
   write_size_ = 0;
   url_ = url;
+dump_file_ = std::make_unique<FileDump>("demux_audio.aac");
 
   if (OpenFile() < 0) {
     log_error("OpenFile Failed");
@@ -181,10 +182,12 @@ void Demux::ReadPacketThread() {
 
     if (pkt->stream_index == audio_stream_index_) {
       // log_debug("Push audio pkt size = %d",pkt->size);
+      dump_file_->WriteBitStream(pkt,audio_stream_->codecpar);
      audio_pkt_queue_->Push(pkt);
+     
     } else if (pkt->stream_index == video_stream_index_) {
       // log_debug("Push video pkt size = %d",pkt->size);
-     video_pkt_queue_->Push(pkt);
+      video_pkt_queue_->Push(pkt);
     }
     write_size_ += pkt->size;
   }
