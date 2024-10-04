@@ -314,7 +314,7 @@ AVFrame *Decodec::AllocOutFrame() {
   }
   
   //  frame->nb_samples = want_audio_spec_.samples;
-  frame->nb_samples = 1500;
+  frame->nb_samples = 2048; //临时设置因为不清楚resample之后的nb_sample，先设置一个较大的nb_sample
   frame->channel_layout =
       av_get_default_channel_layout(want_audio_spec_.channels);
   frame->format = TransforSDLFormattoFFmpeg(want_audio_spec_.format);
