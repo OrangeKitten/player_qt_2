@@ -18,3 +18,6 @@
 
 - 24/09/23
     - 当前版本可以当场播放，videorender 在主线程播放，并且可以接受SDLEvent
+    
+- 24/10/04
+    - 创建了ringbuff代替pcm queue,目的是让SDL callback 每次可以获取到想要的数据大小，从而保持audio的正常播放
