@@ -1,15 +1,20 @@
 #include "decodec.h"
+
 extern "C" {
 #include "log.h"
 }
 
-#define MAX_AUDIO_FRAME_SIZE 192000 // 1 second of 48khz 32-bit audio
+#define MAX_AUDIO_FRAME_SIZE 96000 // 1 second of 48khz 16-bit audio
 
+/* Minimum SDL audio buffer size, in samples. */
+#define SDL_AUDIO_MIN_BUFFER_SIZE 512
+/* Calculate actual buffer size keeping in mind not cause too frequent audio callbacks */
+#define SDL_AUDIO_MAX_CALLBACKS_PER_SEC 30
 static void sdl_audio_callback(void *opaque, Uint8 *stream, int len);
 #define AUDIOFRAME 8
 #define VIDEOFRAME 3
 Decodec::Decodec() {
-  dump_file_ = std::make_unique<FileDump>("audio.aac");
+  dump_file_ = std::make_unique<FileDump>("audio.pcm");
 
   if (!(audio_frame_ = av_frame_alloc())) {
     log_error("Could not allocate audio audio_frame_\n");
@@ -56,8 +61,9 @@ Ret Decodec::InitAudioSDL() {
   want_audio_spec_.format = AUDIO_S16LSB; // SDL 定义
   want_audio_spec_.channels = 2;
   want_audio_spec_.silence = 0;
-  //want_audio_spec_.samples = 1024;
-  want_audio_spec_.samples = aduio_codec_info_->frame_size;
+  // want_audio_spec_.samples = 1024;
+ want_audio_spec_.samples = FFMAX(SDL_AUDIO_MIN_BUFFER_SIZE,
+                                2 << av_log2(want_audio_spec_.freq / SDL_AUDIO_MAX_CALLBACKS_PER_SEC));
   want_audio_spec_.callback = sdl_audio_callback;
   want_audio_spec_.userdata = this;
   int num = SDL_GetNumAudioDevices(0);
@@ -121,15 +127,14 @@ Ret Decodec::InitVideoSDL() {
   return Ret_OK;
 }
 
-void Decodec::VideoRendorThread() {
+void Decodec::VideoRendor() {
 
   int ret = 0;
   while (1) {
     AVFrame *video_frame = (AVFrame *)video_frame_queue_->Pop();
     //dump_file_->WriteVideoYUV420PData(video_frame);
-    log_debug(" \n");
     if (video_frame) {
-        log_debug("SDL_UpdateYUVTexture");
+    
       ret = SDL_UpdateYUVTexture(video_texture_, nullptr, video_frame->data[0],
                                  video_frame->linesize[0], video_frame->data[1],
                                  video_frame->linesize[1], video_frame->data[2],
@@ -138,17 +143,17 @@ void Decodec::VideoRendorThread() {
       if (ret < 0) {
         log_error("Failed to SDL_UpdateYUVTexture: %s", SDL_GetError());
       }
-        log_debug("SDL_RenderClear");
+       
       ret = SDL_RenderClear(renderer_);
       if (ret < 0) {
         log_error("Failed to SDL_RenderClear %s", SDL_GetError());
       }
-       log_debug("SDL_RenderCopy");
+      
       ret = SDL_RenderCopy(renderer_, video_texture_, nullptr, nullptr);
       if (ret < 0) {
         log_error("Failed to render texture: %s", SDL_GetError());
       }
-       log_debug("SDL_RenderPresent");
+     
       SDL_RenderPresent(renderer_);
       SDL_Delay(40); // 控制帧率大约为 25fps (1000ms / 25 = 40ms)
                       SDL_Event event;
@@ -179,7 +184,8 @@ Decodec::~Decodec() {
 }
 Ret Decodec::Init() {
   Ret ret = Ret_OK;
-  audio_frame_queue_ = std::make_shared<PacketQueue>(AUDIOFRAME, "audioframe");
+  // audio_frame_queue_ = std::make_shared<PacketQueue>(AUDIOFRAME, "audioframe");
+  audio_ringbuf_ = std::make_shared<RingBuffer>(MAX_AUDIO_FRAME_SIZE*2*2);
   video_frame_queue_ = std::make_shared<PacketQueue>(VIDEOFRAME, "vidoeframe");
   ret = InitAudio();
   ret = InitVideo();
@@ -280,18 +286,24 @@ Ret Decodec::DecodeAudio(AVPacket *audio_pkt) {
       log_error("Failed to calculate data size\n");
       return Ret_ERROR;
     }
-
-   //dump_file_->WritePcmData(audio_frame_->data, data_size);
+    //dump_file_->WritePcmPlanarData(audio_frame_->data, data_size);
     log_debug("audio_frame nb_samples = %d", audio_frame_->nb_samples);
     if (!(audio_frame_resample_ = AllocOutFrame())) {
       log_error("Could not allocate audio audio_frame_resample_\n");
     }
-    // audio_frame_resample_是resample之后的数据，
-    int resample_sample_number = audio_resample_->audio_resampler_send_frame(
-        audio_frame_, audio_frame_resample_);
-    // dump_file_->WritePcmData(audio_frame_resample_->extended_data,
-    //                          resample_sample_number * 2 * 2);
-   audio_frame_queue_->Push(audio_frame_resample_);
+    // // audio_frame_resample_是resample之后的数据，
+     int resample_sample_number = audio_resample_->audio_resampler_send_frame(
+         audio_frame_, audio_frame_resample_);
+
+      // dump_file_->WritePcmData(audio_frame_resample_->extended_data,
+      //                          resample_sample_number * 2 * 2);
+audio_ringbuf_->push(audio_frame_resample_->extended_data[0],resample_sample_number * 2 * 2);
+//  std::vector<uint8_t> temp = audio_ringbuf_->pop(resample_sample_number * 2 *1.5); //for test
+
+//dump_file_->WritePcmData(temp.data(),temp.size());
+
+     //audio_frame_queue_->Push(audio_frame_resample_);
+     av_frame_free(&audio_frame_resample_);
   }
 }
 AVFrame *Decodec::AllocOutFrame() {
@@ -300,15 +312,16 @@ AVFrame *Decodec::AllocOutFrame() {
   if (!frame) {
     return NULL;
   }
-  frame->nb_samples = want_audio_spec_.samples;
+  
+  //  frame->nb_samples = want_audio_spec_.samples;
+  frame->nb_samples = 1500;
   frame->channel_layout =
       av_get_default_channel_layout(want_audio_spec_.channels);
   frame->format = TransforSDLFormattoFFmpeg(want_audio_spec_.format);
-
   frame->sample_rate = want_audio_spec_.freq;
   ret = av_frame_get_buffer(frame, 0);
   if (ret < 0) {
-    printf("cannot allocate audio data buffer\n");
+    log_error("cannot allocate audio data buffer\n");
     return NULL;
   }
   return frame;
@@ -410,65 +423,73 @@ Ret Decodec::InitVideo() {
   }
 }
 
+// static void sdl_audio_callback(void *opaque, Uint8 *stream, int len) {
+
+//   // TODO
+//   // 创建一个缓存buff来存储队列中的解码数据，并且是在while
+//   // 循环中来做Pop的动作，然后把本次回调没有读取的数据存入到缓存中方便下次读取
+//   Decodec *temp_decodec = (Decodec *)opaque;
+//   int len1, audio_size;
+
+//   uint8_t *audio_buf = nullptr;
+//   static unsigned int audio_buf_size = 0;
+//   static unsigned int audio_buf_index = 0;
+
+//   while (len > 0) {
+//       std::vector<uint8_t>temp_audio_data = temp_decodec->audio_ringbuf_->pop(len);
+//   }
+
+// }
 static void sdl_audio_callback(void *opaque, Uint8 *stream, int len) {
+    // 获取传入的解码器对象
+    Decodec *temp_decoec = (Decodec *)opaque;
+    
+    // 记录当前需要处理的字节数
+    int len1 = 0;
+    
+    // 用于存储解码后的数据
+    static std::vector<uint8_t> audio_buf; 
+    static unsigned int audio_buf_index = 0; // 当前缓冲区索引
+    static unsigned int audio_buf_size = 0;  // 缓冲区中剩余数据的大小
 
-  // TODO
-  // 创建一个缓存buff来存储队列中的解码数据，并且是在while
-  // 循环中来做Pop的动作，然后把本次回调没有读取的数据存入到缓存中方便下次读取
-  Decodec *temp_decoec = (Decodec *)opaque;
-  int len1, audio_size;
+    // 清空 SDL 的音频缓冲区，防止残留数据
+    SDL_memset(stream, 0, len);
 
-  // static uint8_t audio_buf[(MAX_AUDIO_FRAME_SIZE * 3) / 2];
-  uint8_t *audio_buf = nullptr;
-  static unsigned int audio_buf_size = 0;
-  static unsigned int audio_buf_index = 0;
-  AVFrame *audio_frame = (AVFrame *)temp_decoec->audio_frame_queue_->Pop();
-  audio_buf = audio_frame->data[0];
-  // temp_decoec->dump_file_->WritePcmData(audio_frame->extended_data,audio_frame->nb_samples
-  // * 2 * 2);
+    // 处理每个回调需要的 `len` 数据
+    while (len > 0) {
+        // 如果缓冲区为空，则需要从 ringbuf 中获取新的数据
+        if (audio_buf_index >= audio_buf_size) {
+            // 从 ringbuf 中 pop 音频数据
+            audio_buf = temp_decoec->audio_ringbuf_->pop(len);
 
-  audio_size = av_samples_get_buffer_size(
-      nullptr, audio_frame->channels, audio_frame->nb_samples,
-      (AVSampleFormat)audio_frame->format, 0);
-  // log_debug("audio_size:%d\n", audio_size);
-  //    log_debug("audio_frame->nb_samples:%d\n",audio_frame->nb_samples);
-  //    log_debug("audio_frame->channels:%d\n",audio_frame->channels);
-  //    log_debug("audio_frame->format:%d\n",audio_frame->format);
+            // 更新缓冲区大小
+            audio_buf_size = audio_buf.size();
+            audio_buf_index = 0; // 重置索引
 
-  while (len > 0) {
-    // 通过while循环判断缓冲区大小是否大于0，如果len >
-    // 0，说明缓存区stream需要填充数据，那么就判断
-    if (audio_buf_index >= audio_buf_size) {
-      /* We have already sent all our data; get more */
-      //
-      // audio缓冲区拷贝索引指针指向buf结尾，说明缓冲区所有数据都已拷贝到stream中，需要重新解码获取帧数据
+            // 如果 ringbuf 中没有足够的数据，返回的数据小于 len
+            if (audio_buf_size == 0) {
+                // 如果 ringbuf 里没有数据，填充静音
+                SDL_memset(stream, 0, len);
+                return;
+            }
+        }
 
-      // audio_size = audio_frame->nb_samples *audio_frame->channels*2;
+        // 计算当前回调中需要的数据长度
+        len1 = audio_buf_size - audio_buf_index;
 
-      if (audio_size < 0) {
-        /* If error, output silence */
-        audio_buf_size = 1024; // arbitrary?
-        memset(audio_buf, 0, audio_buf_size);
-      } else {
-        // 解码成功，则记录buf大小
-        audio_buf_size = audio_size;
-      }
-      // 重置buf索引为0
-      audio_buf_index = 0;
+        // 如果当前缓冲区的数据大于等于需要填充的长度
+        if (len1 > len) {
+            len1 = len;
+        }
+
+        // 把缓冲区的数据拷贝到 SDL 的音频缓冲区中
+        SDL_MixAudioFormat(stream, &audio_buf[audio_buf_index], AUDIO_S16SYS, len1, SDL_MIX_MAXVOLUME);
+
+        // 更新索引和剩余长度
+        len -= len1;
+        stream += len1;
+        audio_buf_index += len1;
     }
-    // 记录buf数据字节总数
-    len1 = audio_buf_size - audio_buf_index;
-    if (len1 > len) { // 如果buf数据大于缓存区大小
-      len1 = len;     // 先拷贝缓冲区大小的数据
-    }
-    memcpy(stream, (uint8_t *)audio_buf + audio_buf_index,
-           len1);            // 拷贝固定大小的数据
-    len -= len1;             // 记录下次需要拷贝的字节数
-    stream += len1;          // stream后移len1字节
-    audio_buf_index += len1; // buf索引值后移len1字节
-  }
-  // 释放解码后push到队列的音频数据
-  av_frame_free(&audio_frame);
 }
 
 AVSampleFormat Decodec::TransforSDLFormattoFFmpeg(int SDL_format) {

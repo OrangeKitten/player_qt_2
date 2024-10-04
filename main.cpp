@@ -7,7 +7,9 @@
 //for SDL
 #undef main
  int main() {
-     char * url = "audio.mp4";
+   //char * url = "audio.mp4";
+     //char * url = "audio48hz.mp4";
+     char * url = "source.200kbps.768x320_48.flv";
   VideoPlayer videoplay(url);
   videoplay.init();
   videoplay.Play();
@@ -16,4 +18,20 @@
      return 0;
  }
 
+//#include<vector>
+//#include<ringbuf.h>
+//int main() {
+//    RingBuffer ring(6); // Create a ring buffer with a capacity of 10 bytes
 
+//    // Push some data into the ring buffer
+//    ring.push({'H', 'e', 'l', 'l', 'o'});
+
+//    // Pop data from the ring buffer
+//    std::vector<char> data = ring.pop(5);
+//    std::cout << std::string(data.begin(), data.end()) << std::endl; // Output: Hello
+//         ring.push({'d','a','y'});
+//     data = ring.pop(5);
+
+//       std::cout << std::string(data.begin(), data.end()) << std::endl; // Output: Hello
+//    return 0;
+//}

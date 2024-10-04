@@ -7,9 +7,11 @@
 #include "file_dump.h"
 #include "audio_resample.h"
 #include <SDL.h>
+#include "ringbuf.h"
 extern "C" {
 #include "libavcodec/avcodec.h"
 #include "libavformat/avformat.h"
+#include "libavutil/common.h"
 
 }
 class Decodec {
@@ -25,7 +27,7 @@ public:
   Ret setVideoAvCodecInfo(AVCodecParameters *dec);
   void DumpAudioCodecInfo();
   void DumpvideoCodecInfo();
-    void VideoRendorThread();
+    void VideoRendor();
 
 private:
   void AudioThread();
@@ -80,7 +82,8 @@ private:
 
   std::unique_ptr<AudioReSample> audio_resample_;
 public:
-  std::shared_ptr<PacketQueue> audio_frame_queue_;
+  // std::shared_ptr<PacketQueue> audio_frame_queue_;
+  std::shared_ptr<RingBuffer> audio_ringbuf_;
   std::shared_ptr<PacketQueue> video_frame_queue_;
   std::unique_ptr<FileDump>  dump_file_;
 

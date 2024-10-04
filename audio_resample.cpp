@@ -10,7 +10,7 @@ AudioReSample::AudioReSample() {
   // resampled_data_ = nullptr;
   dst_nb_channels_ = 0;
 }
-AudioReSample::~AudioReSample() { // av_freep(&resampled_data_); 
+AudioReSample::~AudioReSample() { // av_freep(&resampled_data_);
 }
 
   void AudioReSample::audio_resampler_alloc(
@@ -65,16 +65,27 @@ AudioReSample::~AudioReSample() { // av_freep(&resampled_data_);
         srcChannelNumber != dstChannelNumber || srcFormat != dstFormat) {
       // 重采样实例
 
+
+      // 使用 log_debug 打印调试信息
+      log_debug("Setting up source channel layout: %d\n", srcChannelNumber);
       resampler_params_.src_channel_layout =
           av_get_default_channel_layout(srcChannelNumber);
+      log_debug("Setting up source sample format: %d\n", srcFormat);
       resampler_params_.src_sample_fmt = srcFormat;
+      log_debug("Setting up source sample rate: %d\n", srcSampleRate);
       resampler_params_.src_sample_rate = srcSampleRate;
       resampler_params_.src_channel_number_ = srcChannelNumber;
+
+      // 使用 log_debug 打印调试信息
+      log_debug("Setting up destination channel layout: %d\n", dstChannelNumber);
       resampler_params_.dst_channel_layout =
           av_get_default_channel_layout(dstChannelNumber);
+      log_debug("Setting up destination sample format: %d\n", dstFormat);
       resampler_params_.dst_sample_fmt = dstFormat;
+      log_debug("Setting up destination sample rate: %d\n", dstSampleRate);
       resampler_params_.dst_sample_rate = dstSampleRate;
       resampler_params_.dst_channel_number_ = dstChannelNumber;
+
       audio_resampler_alloc(resampler_params_);
       audio_fifo =
           av_audio_fifo_alloc(resampler_params_.dst_sample_fmt,
@@ -103,7 +114,13 @@ AudioReSample::~AudioReSample() { // av_freep(&resampled_data_);
     uint8_t **src_data = NULL;
     if (frame) {
       src_nb_samples = frame->nb_samples; // 输入源采样点数量
-      src_data = frame->extended_data;    // 输入源的buffer
+      if(frame->extended_data!=nullptr) { src_data = frame->extended_data;    // 输入源的buffer
+       src_data = frame->extended_data;    // 输入源的buffer
+      } else {
+        log_error("frame->extended_data == nullptr");
+        return 0;
+      }
+     
     }
     // 计算这次做重采样能够获取到的重采样后的点数
     const int dst_nb_samples = av_rescale_rnd(
@@ -111,14 +128,8 @@ AudioReSample::~AudioReSample() { // av_freep(&resampled_data_);
             src_nb_samples,
         resampler_params_.src_sample_rate, resampler_params_.dst_sample_rate,
         AV_ROUND_UP);
-    // if (dst_nb_samples > resampler->resampled_data_size)
-    // {
-    //     //resampled_data
-    //     resampler->resampled_data_size = dst_nb_samples;
-    //     if (init_resampled_data(resampler) < 0) {
-    //         return AVERROR(ENOMEM);
-    //     }
-    // }
+
+    log_debug("dst_nb_samples = %d",dst_nb_samples);
     int nb_samples =
         swr_convert(swr_ctx_, frame_resample->extended_data, dst_nb_samples,
                     (const uint8_t **)src_data, src_nb_samples);

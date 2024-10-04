@@ -14,8 +14,9 @@ public:
   void WriteBitStream(const AVPacket *data, int size,AVCodecID format);
   void WriteBitStream(const AVPacket *data, AVCodecParameters*para);
 
-  void WritePcmData(uint8_t *data[], int size_totol_sample);
+  void WritePcmData(uint8_t *data[], int pcm_size);
   void WritePcmPlanarData(uint8_t *data[], int size_per_sample);
+  void WritePcmData(uint8_t *data, int pcm_size);
   void WriteVideoYUV420PData(AVFrame *videoFrame);
 
 private:

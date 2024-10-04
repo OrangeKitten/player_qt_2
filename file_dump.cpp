@@ -39,7 +39,7 @@ void FileDump::WriteBitStream(const AVPacket *data, int size,AVCodecID format) {
           char adts_header_buf[7] = {0};
             adts_header(adts_header_buf, pkt->size,
                         1,
-                        44100
+                        44100,
                         2);
             //printf("codecparID = %d\n",ifmt_ctx->streams[audio_index]->codecpar->codec_type);
             fwrite(adts_header_buf, 1, 7, file_);  // 写adts header , ts流不适用，ts流分离出来的packet带了adts header
@@ -103,7 +103,7 @@ void FileDump::WritePcmPlanarData(uint8_t *data[], int size_per_sample) {
       LRLRLRLRLRLRLRLRLRLRLRLRLRLRLRLRLRLRL...（每个LR为一个音频样本）
    播放范例：   `
     */
-
+// 解析出来的是32bit float planar 小端数据
     for (int i = 0; i < audio_info_.samples; i++) {
       for (int ch = 0; ch < audio_info_.channels;
            ch++) // 交错的方式写入, 大部分float的格式输出
@@ -113,11 +113,16 @@ void FileDump::WritePcmPlanarData(uint8_t *data[], int size_per_sample) {
   
 }
 
-void FileDump::WritePcmData(uint8_t *data[], int size_totol_sample) {
+void FileDump::WritePcmData(uint8_t *data[], int pcm_size) {
 
-    fwrite(data[0], 1, size_totol_sample, file_);
+    fwrite(data[0], 1, pcm_size, file_);
     fflush(file_);
 
+}
+
+void FileDump::WritePcmData(uint8_t *data, int pcm_size) {
+      fwrite(data, 1, pcm_size, file_);
+    fflush(file_);
 }
 
 int FileDump::adts_header(char *const p_adts_header, const int data_length,

@@ -50,7 +50,7 @@ void VideoPlayer::Play()
     demux_->StartReadPacket();
     decodec_->StartDecode();
         // 打开 YUV 文件
-    decodec_->VideoRendorThread();
+    decodec_->VideoRendor();
 
 }
 //void VideoPlayer::Stop()

@@ -80,7 +80,7 @@ int Demux::OpenFile() {
   audio_info.freq = audio_stream_->codecpar->sample_rate;
   audio_info.samples = audio_stream_->codecpar->frame_size;
   setAudioInfo(audio_info);
-  // DumpMedioInfo();
+  DumpMedioInfo();
 }
 
 Demux::~Demux() {
