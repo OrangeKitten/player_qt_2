@@ -17,8 +17,8 @@ public:
         }
 
         for (size_t i = 0; i < data_size; ++i) {
-            buffer[head] = data[i];
-            head = (head + 1) % capacity;
+            buffer[tail] = data[i];
+            tail = (tail + 1) % capacity;
             if (head == tail) {
                 is_full = true; // Buffer is now full
             }
@@ -41,8 +41,8 @@ public:
         std::vector<uint8_t> data(pop_size);
 
         for (size_t i = 0; i < pop_size; ++i) {
-            data[i] = buffer[tail];
-            tail = (tail + 1) % capacity;
+            data[i] = buffer[head];
+            head = (head + 1) % capacity;
             is_full = false; // Buffer is no longer full
         }
          cond_var.notify_one(); // Notify one waiting thread
@@ -53,10 +53,10 @@ public:
         if (is_full) {
             return capacity; // If full, return the capacity
         }
-        if (head >= tail) {
-            return head - tail;
+        if (tail >= head) {
+            return tail - head;
         }
-        return capacity - tail + head;
+        return capacity - head + tail;
     }
 
     size_t available_space() const {

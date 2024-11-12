@@ -15,12 +15,15 @@ Demux::Demux(char *url) {
   read_size_ = 0;
   write_size_ = 0;
   url_ = url;
-dump_file_ = std::make_unique<FileDump>("demux_audio.aac");
+  frame_rate_ = {0,0};
+  dump_file_ = std::make_unique<FileDump>("demux_audio.aac");
 
   if (OpenFile() < 0) {
     log_error("OpenFile Failed");
   }
+  
 }
+
 
 int Demux::OpenFile() {
   // AVFormatContext是描述一个媒体文件或媒体流的构成和基本信息的结构体
@@ -89,6 +92,18 @@ Demux::~Demux() {
   }
   if (format_ctx_)
     avformat_close_input(&format_ctx_);
+}
+
+AVRational Demux::getVideoTimeBase (){
+return video_stream_->time_base;
+}
+
+AVRational Demux::getAudioTimeBase (){
+return audio_stream_->time_base;
+}
+
+AVRational Demux::getVideoFrameRate (){
+return frame_rate_ = av_guess_frame_rate(format_ctx_, video_stream_, NULL);
 }
 
 void Demux::DumpMedioInfo() {
@@ -182,7 +197,7 @@ void Demux::ReadPacketThread() {
 
     if (pkt->stream_index == audio_stream_index_) {
       // log_debug("Push audio pkt size = %d",pkt->size);
-      dump_file_->WriteBitStream(pkt,audio_stream_->codecpar);
+      //dump_file_->WriteBitStream(pkt,audio_stream_->codecpar);
      audio_pkt_queue_->Push(pkt);
      
     } else if (pkt->stream_index == video_stream_index_) {
@@ -208,3 +223,4 @@ Ret Demux::getVideoAvCodecInfo(AVCodecParameters *dec) {
   memcpy(dec, video_stream_->codecpar, sizeof(AVCodecParameters));
   return Ret_OK;
 }
+

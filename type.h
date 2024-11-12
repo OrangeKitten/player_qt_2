@@ -6,7 +6,13 @@ enum Ret {
     Ret_ERROR = -1,
     Ret_ERROR_EXIT = -2,
 };
-
+enum class PlayerState {
+    PlayerState_Stop = 0,
+    PlayerState_Ready,
+    PlayerState_Play,
+    PlayerState_Pause,
+    PlayerState_Seek,
+};
 typedef struct AUDIO_INFO {
     int freq;
     int channels;

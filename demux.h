@@ -2,7 +2,7 @@
 #ifndef __DEMUX_H__
 #define __DEMUX_H__
 #include <string>
-#include "packet_queue.h"
+#include "packet_deque.h"
 #include <memory>
 #include <thread>
 #include "type.h"
@@ -22,12 +22,17 @@ public:
     void StartReadPacket();
     Ret getAudioAvCodecInfo( AVCodecParameters *dec);
     Ret getVideoAvCodecInfo( AVCodecParameters *dec);
+    AVRational getVideoTimeBase();
+    AVRational getAudioTimeBase();
+    AVRational getVideoFrameRate();
+   
 private:
     void DumpMedioInfo();
     int OpenFile();
     void ReadPacketThread();
 
-
+public:
+AVRational frame_rate_;
 private:
     AVFormatContext *format_ctx_;
     AVIOContext *avio_ctx_;
@@ -42,7 +47,9 @@ private:
     std::unique_ptr<std::thread> read_packet_thread_;
     int read_size_;
     int write_size_;
-     std::unique_ptr<FileDump>  dump_file_;
+    std::unique_ptr<FileDump>  dump_file_;
+    
+    
 
 };
 #endif // DEMUX_H

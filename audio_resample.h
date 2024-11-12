@@ -5,7 +5,6 @@
 #include <memory>
 
 extern "C" {
-// #include "libavresample/avresample.h"
 #include "libavutil/audio_fifo.h"
 #include "libavutil/opt.h"
 #include "libswresample/swresample.h"
@@ -43,5 +42,6 @@ public:
   //  AVFrame *audio_resampler_receive_frame(audio_resampler_t *resampler,
   //                                         int nb_samples);
   void audio_resampler_alloc(const audio_resampler_params_t &resampler_params);
+  int get_reframe_samplerate();
 };
 #endif

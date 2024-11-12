@@ -1,5 +1,5 @@
-#ifndef __PACKET_QUEUE_H__
-#define __PACKET_QUEUE_H__
+#ifndef __PACKET_DEQUE_H__
+#define __PACKET_DEQUE_H__
 
 #include <condition_variable>
 #include <queue>
@@ -17,6 +17,8 @@ public:
   ~PacketQueue();
   void Push(void *pkt);
   void* Pop();
+  void*Peek();
+  void *PeekNext();
 //  void PushNullpacket();
   int Size();
   bool Empty();
@@ -28,10 +30,10 @@ private:
   std::mutex mutex_;
   std::condition_variable condition_;
   // std::condition_variable not_full_condition_;
-  std::queue< void*> packets_queue_;
+  std::deque< void*> packets_deque_;
   std::atomic<int>  queue_size_;
   int max_size_;
-  std::string quque_name_;
+  std::string deque_name_;
 
 };
 #endif
