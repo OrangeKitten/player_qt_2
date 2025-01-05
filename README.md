@@ -26,3 +26,5 @@
     - 增加avsync逻辑，已audio pts更新锚点，根据video pts 与前后两帧的时间间隔来实现延时与丢帧逻辑
     - 更新消息队列数据结构，使用deque实现peeknext功能
     - 增加pause功能
+- 25/01/05
+   - 该项目停止更新转移到VideoPlayer中
